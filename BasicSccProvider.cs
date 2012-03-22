@@ -425,6 +425,8 @@ namespace GitScc
             }
             catch(Exception ex) // try copy file silently
             {
+                if (ErrorHandler.IsCriticalException(ex))
+                    throw;
             }
 
             if (File.Exists(tmpPath))
