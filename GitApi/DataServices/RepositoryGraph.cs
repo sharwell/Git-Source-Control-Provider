@@ -8,6 +8,7 @@ using NGit.Revwalk;
 using NGit.Treewalk;
 using NGit.Treewalk.Filter;
 using NGit.Util;
+using NGit.Storage.File;
 
 namespace GitScc.DataServices
 {
@@ -60,9 +61,9 @@ namespace GitScc.DataServices
                             Id = c.Id.Name,
                             ParentIds = c.Parents.Select(p => p.Id.Name).ToList(),
                             CommitDateRelative = RelativeDateFormatter.Format(c.GetAuthorIdent().GetWhen()),
-                            CommitterName = c.GetCommitterIdent().GetName(),
-                            CommitterEmail = c.GetCommitterIdent().GetEmailAddress(),
-                            CommitDate = c.GetCommitterIdent().GetWhen(),
+                            CommitterName = c.GetAuthorIdent().GetName(),
+                            CommitterEmail = c.GetAuthorIdent().GetEmailAddress(),
+                            CommitDate = c.GetAuthorIdent().GetWhen(),
                             Message = c.GetShortMessage(),
                         }).ToList();
 
@@ -87,10 +88,11 @@ namespace GitScc.DataServices
                 if (refs == null && repository != null)
                 {
                     refs = (from r in repository.GetAllRefs()
-                            //where !r.Value.IsSymbolic()
                             select new Ref
                             {
-                                Id = r.Value.GetTarget().GetObjectId().Name,
+                                Id = r.Value.GetPeeledObjectId() != null ?
+                                     r.Value.GetPeeledObjectId().Name:
+                                     r.Value.GetTarget().GetObjectId().Name,
                                 RefName = r.Key,
                             }).ToList();
                 }
