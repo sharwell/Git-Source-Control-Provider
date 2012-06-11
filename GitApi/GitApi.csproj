@@ -6,7 +6,7 @@
     <ProjectGuid>{161E81E2-25E5-4134-8D2D-595419B1265B}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>GitApi</RootNamespace>
+    <RootNamespace>GitScc</RootNamespace>
     <AssemblyName>GitApi</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
