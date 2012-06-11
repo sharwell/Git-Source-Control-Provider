@@ -40,41 +40,47 @@ namespace GitScc
             // the object returned by the Content property.
             base.Content = control;
 
-            OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
+            //OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
 
-            var cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesCommit);
-            var menu = new MenuCommand(new EventHandler(OnCommitCommand), cmd);
-            mcs.AddCommand(menu);
+            //var cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesCommit);
+            //var menu = new MenuCommand(new EventHandler(OnCommitCommand), cmd);
+            //mcs.AddCommand(menu);
 
-            cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesAmend);
-            menu = new MenuCommand(new EventHandler(OnAmendCommitCommand), cmd);
-            mcs.AddCommand(menu);
+            //cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesAmend);
+            //menu = new MenuCommand(new EventHandler(OnAmendCommitCommand), cmd);
+            //mcs.AddCommand(menu);
 
-            cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesRefresh);
-            menu = new MenuCommand(new EventHandler(OnRefreshCommand), cmd);
-            mcs.AddCommand(menu);
+            //cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesRefresh);
+            //menu = new MenuCommand(new EventHandler(OnRefreshCommand), cmd);
+            //mcs.AddCommand(menu);
 
+            //sccProviderService = BasicSccProvider.GetServiceEx<SccProviderService>();
+            //Refresh(sccProviderService.CurrentTracker, true); // refresh when the tool window becomes visible
+
+        }
+
+        public override void OnToolWindowCreated()
+        {
             sccProviderService = BasicSccProvider.GetServiceEx<SccProviderService>();
-
             Refresh(sccProviderService.CurrentTracker, true); // refresh when the tool window becomes visible
+        }    
+
+        internal void OnCommitCommand()
+        {
+            ((PendingChangesView)control).Commit();
         }
 
-        private void OnCommitCommand(object sender, EventArgs e)
+        internal void OnAmendCommitCommand()
         {
-            ((PendingChangesView) control).Commit();
+            ((PendingChangesView)control).AmendCommit();
         }
 
-        private void OnAmendCommitCommand(object sender, EventArgs e)
-        {
-            ((PendingChangesView) control).AmendCommit();
-        }
-
-        private void OnRefreshCommand(object sender, EventArgs e)
-        {
-            sccProviderService.OpenTracker();
-            sccProviderService.RefreshNodesGlyphs();
-            Refresh(sccProviderService.CurrentTracker, true);
-        }
+        //private void OnRefreshCommand(object sender, EventArgs e)
+        //{
+        //    sccProviderService.OpenTracker();
+        //    sccProviderService.RefreshNodesGlyphs();
+        //    Refresh(sccProviderService.CurrentTracker, true);
+        //}
 
         internal void Refresh(GitFileStatusTracker tracker, bool force = false)
         {

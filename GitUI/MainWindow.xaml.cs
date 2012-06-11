@@ -4,8 +4,9 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using GitScc;
 using System.Windows.Threading;
+using GitScc;
+using Microsoft.Windows.Shell;
 
 namespace GitUI
 {
@@ -32,16 +33,18 @@ namespace GitUI
 
 		private void Window_Loaded(object sender, RoutedEventArgs e)
 		{
+			this.Style = (Style)Resources["GradientStyle"];
 
 			GitBash.GitExePath = GitSccOptions.Current.GitBashPath;
+            GitBash.UseUTF8FileNames = GitSccOptions.Current.UseUTF8FileNames;
 
 			if (!GitBash.Exists) GitBash.GitExePath = TryFindFile(new string[] {
 					@"C:\Program Files\Git\bin\sh.exe",
 					@"C:\Program Files (x86)\Git\bin\sh.exe",
 			});
 
-			this.gitConsole.GitExePath = GitBash.GitExePath;
-			this.rootGrid.RowDefinitions[0].Height = new GridLength(this.ActualHeight * 0.75);
+			//this.gitConsole.GitExePath = GitBash.GitExePath;
+			//this.rootGrid.RowDefinitions[0].Height = new GridLength(this.ActualHeight - 60);
 
 			this.gitViewModel = GitViewModel.Current;
 			//this.bottomToolBar.GitViewModel = GitViewModel.Current;
@@ -52,25 +55,26 @@ namespace GitUI
 			this.gitViewModel.GraphChanged += (o, reload) =>
 			{
 				// show loading sign immediately
-				Action a = () => loading.Visibility = Visibility.Visible;
-				this.Dispatcher.BeginInvoke(a, DispatcherPriority.Render);
+				////Action a = () => loading.Visibility = Visibility.Visible;
+				////this.Dispatcher.BeginInvoke(a, DispatcherPriority.Render);
 
+				loading.Visibility = Visibility.Visible;
 				Action act = () => 
 				{
-					loading.Visibility = Visibility.Visible;
-
 					if (gitViewModel.Tracker.HasGitRepository)
-						this.Title = gitViewModel.Tracker.GitWorkingDirectory;
+					{
+						this.txtRepo.Text = gitViewModel.Tracker.GitWorkingDirectory;
+						this.txtPrompt.Text = GitIntellisenseHelper.GetPrompt();
+					}
 					this.graph.Show(gitViewModel.Tracker, reload != null);
-
-					this.gitConsole.WorkingDirectory = gitViewModel.Tracker.HasGitRepository ?
-						gitViewModel.Tracker.GitWorkingDirectory :
-						gitViewModel.WorkingDirectory;
 				};
 				this.Dispatcher.BeginInvoke(act, DispatcherPriority.ApplicationIdle);
 			};
 
 			this.gitViewModel.Refresh(true);
+
+			Action a1 = () => this.WindowState = WindowState.Maximized;
+			this.Dispatcher.BeginInvoke(a1, DispatcherPriority.ApplicationIdle);
 		}
 
 		private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -92,87 +96,6 @@ namespace GitUI
 			}
 		}
 
-		#region toolbars
-		private void rootGrid_MouseRightButtonUp(object sender, MouseButtonEventArgs e)        
-		{
-			if (this.topToolBar.Visibility == Visibility.Collapsed)
-			{
-				ShowTopToolBar();
-				//ShowBottomToolBarBar();
-			}
-			else
-			{
-				//HideTopToolBar();
-				HideBottomToolBar();
-			}
-		}
-
-		private void Grid_PreviewMouseMove(object sender, MouseEventArgs e)
-		{
-			//var y = e.GetPosition(rootGrid).Y;
-			//if (y < 60)
-			//{
-			//    ShowTopToolBar();
-			//}
-			//else if (y > this.ActualHeight - 60)
-			//{
-			//    ShowBottomToolBarBar();
-			//}
-		}
-
-		private void ShowTopToolBar()
-		{
-			if (this.topToolBar.Visibility == Visibility.Collapsed)
-			{
-				this.topToolBar.Visibility = Visibility.Visible;
-				this.topToolBar.RenderTransform.SetValue(TranslateTransform.YProperty, -60.0);
-				this.topToolBar.Visibility = Visibility.Visible;
-				var animationDuration = TimeSpan.FromSeconds(1.0);
-				var animation = new DoubleAnimation(0, new Duration(animationDuration));
-				animation.EasingFunction = new CubicEase() { EasingMode = EasingMode.EaseOut };
-				this.topToolBar.RenderTransform.BeginAnimation(TranslateTransform.YProperty, animation);
-			}
-		}
-
-		private void HideTopToolBar()
-		{
-			if (this.topToolBar.Visibility == Visibility.Visible)
-			{
-				var animationDuration = TimeSpan.FromSeconds(1.0);
-				var animation = new DoubleAnimation(-60.0, new Duration(animationDuration));
-				animation.EasingFunction = new CubicEase() { EasingMode = EasingMode.EaseOut };
-				animation.Completed += (o, _) => this.topToolBar.Visibility = Visibility.Collapsed;
-				this.topToolBar.RenderTransform.BeginAnimation(TranslateTransform.YProperty, animation);
-			}
-		}
-
-		private void ShowBottomToolBarBar()
-		{
-			//if (this.bottomToolBar.Visibility == Visibility.Collapsed)
-			//{
-			//    this.bottomToolBar.Visibility = Visibility.Visible;
-			//    this.bottomToolBar.RenderTransform.SetValue(TranslateTransform.YProperty, 60.0);
-			//    this.bottomToolBar.Visibility = Visibility.Visible;
-			//    var animationDuration = TimeSpan.FromSeconds(1.0);
-			//    var animation = new DoubleAnimation(0, new Duration(animationDuration));
-			//    animation.EasingFunction = new CubicEase() { EasingMode = EasingMode.EaseOut };
-			//    this.bottomToolBar.RenderTransform.BeginAnimation(TranslateTransform.YProperty, animation);
-			//}
-		}
-
-		private void HideBottomToolBar()
-		{
-			//if (this.bottomToolBar.Visibility == Visibility.Visible)
-			//{
-			//    var animationDuration = TimeSpan.FromSeconds(1.0);
-			//    var animation = new DoubleAnimation(60.0, new Duration(animationDuration));
-			//    animation.EasingFunction = new CubicEase() { EasingMode = EasingMode.EaseOut };
-			//    animation.Completed += (o, _) => this.bottomToolBar.Visibility = Visibility.Collapsed;
-			//    this.bottomToolBar.RenderTransform.BeginAnimation(TranslateTransform.YProperty, animation);
-			//}
-		} 
-		#endregion
-
 		#region show commit details
 
 		private void ShowCommitDetails(string id)
@@ -184,7 +107,9 @@ namespace GitUI
 				var animationDuration = TimeSpan.FromSeconds(.5);
 				var animation = new DoubleAnimation(0, new Duration(animationDuration));
 				animation.EasingFunction = new CubicEase() { EasingMode = EasingMode.EaseOut };
+
 				loading.Visibility = Visibility.Visible;
+
 				animation.Completed += (_, e) =>
 				{
 					this.details.Show(this.gitViewModel.Tracker, id);
@@ -210,11 +135,22 @@ namespace GitUI
 		{
 			try
 			{
-				var animationDuration = TimeSpan.FromSeconds(.2);
-				var animation = new DoubleAnimation(this.ActualWidth + 200, new Duration(animationDuration));
-				animation.EasingFunction = new CubicEase() { EasingMode = EasingMode.EaseIn };
-				animation.Completed += (o, _) => this.details.Visibility = Visibility.Collapsed;
-				this.details.RenderTransform.BeginAnimation(TranslateTransform.XProperty, animation);
+				if (e.Parameter == null)
+				{
+					var animationDuration = TimeSpan.FromSeconds(.2);
+					var animation = new DoubleAnimation(this.ActualWidth + 200, new Duration(animationDuration));
+					animation.EasingFunction = new CubicEase() { EasingMode = EasingMode.EaseIn };
+					animation.Completed += (o, _) => this.details.Visibility = Visibility.Collapsed;
+					this.details.RenderTransform.BeginAnimation(TranslateTransform.XProperty, animation);
+				}
+				else
+				{
+					var animationDuration = TimeSpan.FromSeconds(.2);
+					var animation = new DoubleAnimation(-this.ActualWidth, new Duration(animationDuration));
+					animation.EasingFunction = new CubicEase() { EasingMode = EasingMode.EaseIn };
+					animation.Completed += (o, _) => this.pendingChanges.Visibility = Visibility.Collapsed;
+					this.pendingChanges.RenderTransform.BeginAnimation(TranslateTransform.XProperty, animation);
+				}
 			}
 			catch (Exception ex)
 			{
@@ -236,20 +172,11 @@ namespace GitUI
 
 		private void GraphLoaded_Executed(object sender, ExecutedRoutedEventArgs e)
 		{
-			//var animationDuration = TimeSpan.FromSeconds(5);
-			//var animation = new DoubleAnimation(0.8, new Duration(animationDuration));
-			////animation.EasingFunction = new CubicEase() { EasingMode = EasingMode.EaseIn };
-			//animation.Completed += (o, _) =>
-			//{
-			//    this.loading.Visibility = Visibility.Collapsed;
-			//    this.loading.Opacity = 1;
-			//};
-			//this.loading.BeginAnimation(UIElement.OpacityProperty, animation);
-
 			gitViewModel.DisableAutoRefresh();
 
 			this.loading.Visibility = Visibility.Collapsed;
 			this.topToolBar.GitViewModel = gitViewModel;
+
 			this.Title = gitViewModel.Tracker.HasGitRepository ?
 				string.Format("{0} ({1})", gitViewModel.Tracker.GitWorkingDirectory, gitViewModel.Tracker.CurrentBranch) :
 				string.Format("{0} (No Repository)", gitViewModel.WorkingDirectory);
@@ -261,7 +188,24 @@ namespace GitUI
 		{
 			gitViewModel.Refresh(true);
 		}
-		
+
+		private void ShowMessage_Executed(object sender, ExecutedRoutedEventArgs e)
+		{
+			dynamic msg = e.Parameter;
+			txtMessage.Text = msg.Message;
+			txtMessage.Foreground = new SolidColorBrush(
+				msg.Error ? Colors.Red : Colors.Navy);
+			txtMessage.Visibility = Visibility.Visible;
+			txtMessage.Opacity = 1.0;
+			DoubleAnimation doubleAnimation = new DoubleAnimation
+			{
+				Duration = new Duration(TimeSpan.FromMilliseconds(10000)),
+				From = 1.0, To = 0.0
+			};
+			doubleAnimation.Completed += (o, _) => txtMessage.Visibility = Visibility.Collapsed;
+			txtMessage.BeginAnimation(UIElement.OpacityProperty, doubleAnimation);
+		}
+
 		#endregion
 
 		#region select and comapre commits
@@ -297,6 +241,30 @@ namespace GitUI
 			}
 		}
 
+		private void PendingChanges_Executed(object sender, ExecutedRoutedEventArgs e)
+		{
+			try
+			{
+				this.pendingChanges.RenderTransform.SetValue(TranslateTransform.XProperty, -this.ActualWidth);
+				this.pendingChanges.Visibility = Visibility.Visible;
+				var animationDuration = TimeSpan.FromSeconds(.5);
+				var animation = new DoubleAnimation(0, new Duration(animationDuration));
+				animation.EasingFunction = new CubicEase() { EasingMode = EasingMode.EaseOut };
+
+				loading.Visibility = Visibility.Visible;
+				animation.Completed += (_, x) =>
+				{
+					this.pendingChanges.Refresh();
+					loading.Visibility = Visibility.Collapsed;
+				};
+				this.pendingChanges.RenderTransform.BeginAnimation(TranslateTransform.XProperty, animation);
+				
+			}
+			catch (Exception ex)
+			{
+				Log.WriteLine("MainWindow.PendingChanges_Executed {0}", ex.ToString());
+			}
+		}
 		#endregion    
 
 		private void Window_Drop(object sender, DragEventArgs e)
@@ -317,6 +285,11 @@ namespace GitUI
 					this.gitViewModel.Refresh(true);
 				}
 			}
+		}
+
+		private void _OnSystemCommandCloseWindow(object sender, ExecutedRoutedEventArgs e)
+		{
+			SystemCommands.CloseWindow(this);
 		}
 	}
 }

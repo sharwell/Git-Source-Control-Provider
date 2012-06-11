@@ -34,15 +34,17 @@ namespace GitUI.UI
                 if (tracker.HasGitRepository)
                 {
                     this.branchList.ItemsSource = tracker.RepositoryGraph.Refs
-                         .Where(r => (r.Type == RefTypes.Branch || r.Type == RefTypes.HEAD) && isLoaded(r))
-                         .Select(r => r.Name);
+                            .Where(r => (r.Type == RefTypes.Branch || r.Type == RefTypes.HEAD) && isLoaded(r))
+                            .Select(r => r.Name);
 
                     this.tagList.ItemsSource = tracker.RepositoryGraph.Refs
                         .Where(r => r.Type == RefTypes.Tag && isLoaded(r))
                         .Select(r => r.Name);
                 }
+                btnPendingChanges.IsEnabled = tracker.ChangedFiles.Count() > 0;
 
                 btnGitBash.IsEnabled = GitBash.Exists;
+
             }
         }
 
@@ -55,7 +57,8 @@ namespace GitUI.UI
         {
             InitializeComponent();
             txtCommit1.Text = txtCommit2.Text = "";
-            lblSelectedCommits.Visibility = btnCompare.Visibility =
+            btnCompare.IsEnabled = btnPendingChanges.IsEnabled = false;
+            lblSelectedCommits.Visibility = 
             lstSearch.Visibility = Visibility.Collapsed;
         }
 
@@ -68,6 +71,7 @@ namespace GitUI.UI
 
         private void branchList_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
+            if (tracker == null || !tracker.HasGitRepository) return;
             var name = branchList.SelectedValue as string;
             var id = tracker.RepositoryGraph.Refs
                             .Where(r => (r.Type == RefTypes.Branch || r.Type == RefTypes.HEAD) && r.Name == name)
@@ -82,6 +86,7 @@ namespace GitUI.UI
 
         private void tagList_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
+            if (tracker == null || !tracker.HasGitRepository) return;
             var name = tagList.SelectedValue as string;
             var id = tracker.RepositoryGraph.Refs
                             .Where(r => r.Type == RefTypes.Tag && r.Name == name)
@@ -97,6 +102,11 @@ namespace GitUI.UI
         private void btnRefresh_Click(object sender, RoutedEventArgs e)
         {
             HistoryViewCommands.RefreshGraph.Execute(null, this);
+        }
+
+        private void btnPendingChanges_Click(object sender, RoutedEventArgs e)
+        {
+            HistoryViewCommands.PendingChanges.Execute(null, this);
         }
 
         #region Search commits
@@ -184,7 +194,7 @@ namespace GitUI.UI
             if (commit != null)
             {
                 txtSearch.TextChanged -= new TextChangedEventHandler(txtSearch_TextChanged);
-                txtSearch.Text = commit.Message;
+                txtSearch.Text = commit.ToString();
                 txtSearch.TextChanged += new TextChangedEventHandler(txtSearch_TextChanged);
                 HistoryViewCommands.ScrollToCommit.Execute(commit.Id, this);
                 SelectCommit(commit.ShortId, null);
@@ -219,13 +229,13 @@ namespace GitUI.UI
             {
                 id1 = id;
                 txtCommit1.Text = name ?? id;
-                btnCompare.Visibility = Visibility.Collapsed;
+                btnCompare.IsEnabled = false;
             }
             else if (id2 == null)
             {
                 id2 = id;
                 txtCommit2.Text = name ?? id;
-                btnCompare.Visibility = Visibility.Visible;
+                btnCompare.IsEnabled = true;
             }
             else
             {
@@ -233,7 +243,7 @@ namespace GitUI.UI
                 txtCommit1.Text = txtCommit2.Text;
                 id2 = id;
                 txtCommit2.Text = name ?? id;
-                btnCompare.Visibility = Visibility.Visible;
+                btnCompare.IsEnabled = true;
             }
         }
 
@@ -249,6 +259,5 @@ namespace GitUI.UI
         {
             GitViewModel.OpenGitBash();
         }
-
     }
 }

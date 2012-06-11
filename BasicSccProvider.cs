@@ -43,8 +43,8 @@ namespace GitScc
     // Register the source control provider to be visible in Tools/Options/SourceControl/Plugin dropdown selector
     [ProvideSourceControlProvider("Git Source Control Provider", "#100")]
     // Pre-load the package when the command UI context is asserted (the provider will be automatically loaded after restarting the shell if it was active last time the shell was shutdown)
-    //[MsVsShell.ProvideAutoLoad("C4128D99-0000-41D1-A6C3-704E6C1A3DE2")]
-    [ProvideAutoLoad(UIContextGuids.SolutionExists)]
+    [MsVsShell.ProvideAutoLoad("C4128D99-0000-41D1-A6C3-704E6C1A3DE2")]
+    //[ProvideAutoLoad(UIContextGuids.SolutionExists)]
     // Declare the package guid
     [Guid("C4128D99-2000-41D1-A6C3-704E6C1A3DE2")]
     public class BasicSccProvider : MsVsShell.Package, IOleCommandTarget
@@ -59,6 +59,7 @@ namespace GitScc
             _SccProvider = this;
             Trace.WriteLine(String.Format(CultureInfo.CurrentUICulture, "Entering constructor for: {0}", this.ToString()));
             GitBash.GitExePath = GitSccOptions.Current.GitBashPath;
+            GitBash.UseUTF8FileNames = !GitSccOptions.Current.NotUseUTF8FileNames;
         }
 
         /////////////////////////////////////////////////////////////////////////////
@@ -136,6 +137,14 @@ namespace GitScc
                 cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesCommitToBranch);
                 menu = new MenuCommand(new EventHandler(OnSwitchBranchCommand), cmd);
                 mcs.AddCommand(menu);
+
+                cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesCommit);
+                menu = new MenuCommand(new EventHandler(OnCommitCommand), cmd);
+                mcs.AddCommand(menu);
+
+                cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesAmend);
+                menu = new MenuCommand(new EventHandler(OnAmendCommitCommand), cmd);
+                mcs.AddCommand(menu);
             }
 
 
@@ -205,8 +214,7 @@ namespace GitScc
                     break;
 
                 case CommandId.icmdSccCommandGitBash:
-                    var gitBashPath = GitSccOptions.Current.GitBashPath;
-                    if (!string.IsNullOrEmpty(gitBashPath) && File.Exists(gitBashPath))
+                    if (GitBash.Exists)
                     {
                         cmdf |= OLECMDF.OLECMDF_ENABLED;
                     }
@@ -234,16 +242,19 @@ namespace GitScc
 
                 case CommandId.icmdSccCommandUndo:
                 case CommandId.icmdSccCommandCompare:
-                    if (sccService.CanCompareSelectedFile) cmdf |= OLECMDF.OLECMDF_ENABLED;
+                    if (GitBash.Exists && sccService.CanCompareSelectedFile) cmdf |= OLECMDF.OLECMDF_ENABLED;
                     break;
 
                 case CommandId.icmdSccCommandEditIgnore:
+                    if (sccService.IsSolutionGitControlled) cmdf |= OLECMDF.OLECMDF_ENABLED;
+                    break;
+
                 case CommandId.icmdSccCommandHistory:
                 case CommandId.icmdSccCommandPendingChanges:
                 case CommandId.icmdPendingChangesAmend:
                 case CommandId.icmdPendingChangesCommit:
                 case CommandId.icmdPendingChangesCommitToBranch:
-                    if (sccService.IsSolutionGitControlled) cmdf |= OLECMDF.OLECMDF_ENABLED;
+                    if (GitBash.Exists && sccService.IsSolutionGitControlled) cmdf |= OLECMDF.OLECMDF_ENABLED;
                     break;
 
                 case CommandId.icmdSccCommandRefresh:
@@ -324,6 +335,7 @@ namespace GitScc
         private void OnGitBashCommand(object sender, EventArgs e)
         {
             var gitBashPath = GitSccOptions.Current.GitBashPath;
+            gitBashPath = gitBashPath.Replace("git.exe", "sh.exe");
             RunDetatched("cmd.exe", string.Format("/c \"{0}\" --login -i", gitBashPath));
         }
 
@@ -447,6 +459,16 @@ namespace GitScc
             branchPicker.Show();
         }
 
+        private void OnCommitCommand(object sender, EventArgs e)
+        {
+            GetToolWindowPane<PendingChangesToolWindow>().OnCommitCommand();
+        }
+
+        private void OnAmendCommitCommand(object sender, EventArgs e)
+        {
+            GetToolWindowPane<PendingChangesToolWindow>().OnAmendCommitCommand();
+        }
+
         #endregion
 
         // This function is called by the IVsSccProvider service implementation when the active state of the provider changes
@@ -528,9 +550,9 @@ namespace GitScc
         //    }
         //}
 
-        //private T GetToolWindowPane<T>() where T : ToolWindowPane
-        //{
-        //    return (T)this.FindToolWindow(typeof(T), 0, true);
-        //}
+        private T GetToolWindowPane<T>() where T : ToolWindowPane
+        {
+            return (T)this.FindToolWindow(typeof(T), 0, true);
+        }
     }
 }

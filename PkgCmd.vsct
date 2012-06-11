@@ -204,7 +204,7 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>IconAndText</CommandFlag>
         <Strings>
-          <ButtonText>View History</ButtonText>
+          <ButtonText>Git History</ButtonText>
         </Strings>
       </Button>
 
@@ -239,7 +239,7 @@
         </Strings>
       </Button>
 
-      <Button guid="guidSccProviderCmdSet" id="icmdPendingChangesRefresh" priority="0x0007" type="Button">
+      <!--<Button guid="guidSccProviderCmdSet" id="icmdPendingChangesRefresh" priority="0x0007" type="Button">
         <Parent guid="guidSccProviderCmdSet" id="igrpPendingChangesToolWindowToolbarGroup"/>
         <Icon guid="guidSccProviderImages" id="iconRefresh" />
         <CommandFlag>DynamicVisibility</CommandFlag>
@@ -248,7 +248,7 @@
         <Strings>
           <ButtonText>Refresh</ButtonText>
         </Strings>
-      </Button>
+      </Button>-->
       
     </Buttons>
     
@@ -293,6 +293,10 @@
       <Parent guid="guidSccProviderCmdSet" id="igrpPendingChangesToolWindowToolbarGroup"/>
     </CommandPlacement>
 
+    <CommandPlacement guid="guidSccProviderCmdSet" id="icmdSccCommandRefresh" priority="0x0008">
+      <Parent guid="guidSccProviderCmdSet" id="igrpPendingChangesToolWindowToolbarGroup"/>
+    </CommandPlacement>
+    
     <CommandPlacement guid="guidSccProviderCmdSet" id="icmdSccCommandHistory" priority="0x0009">
       <Parent guid="guidSccProviderCmdSet" id="igrpPendingChangesToolWindowToolbarGroup"/>
     </CommandPlacement>
