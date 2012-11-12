@@ -1,15 +1,16 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using GitScc;
-using System.Diagnostics;
 
 namespace GitUI.UI
 {
@@ -27,7 +28,6 @@ namespace GitUI.UI
         {
             InitializeComponent();
             this.service = GitViewModel.Current;
-            this.tracker = GitViewModel.Current.Tracker;
         }
 
         #region Events
@@ -39,13 +39,26 @@ namespace GitUI.UI
             sortMemberPath = e.Column.SortMemberPath;
             sortDirection = e.Column.SortDirection != ListSortDirection.Ascending ?
                 ListSortDirection.Ascending : ListSortDirection.Descending;
+        }
 
+        private void dataGrid1_KeyDown(object sender, KeyEventArgs e)
+        {
+            var selectedItem = this.dataGrid1.SelectedItem as GitFile;
+            if (selectedItem == null || e.Key != Key.Space) return;
+            var selected = !selectedItem.IsSelected;
+            foreach (var item in this.dataGrid1.SelectedItems)
+            {
+                ((GitFile)item).IsSelected = selected;
+            }
         }
 
         private void checkBoxSelected_Click(object sender, RoutedEventArgs e)
         {
             var checkBox = sender as CheckBox;
-            ((GitFile)this.dataGrid1.SelectedItem).IsSelected = checkBox.IsChecked == true;
+            foreach (var item in this.dataGrid1.SelectedItems)
+            {
+                ((GitFile)item).IsSelected = checkBox.IsChecked == true;
+            }
         }
 
         private void checkBoxAllStaged_Click(object sender, RoutedEventArgs e)
@@ -81,13 +94,21 @@ namespace GitUI.UI
                     var tmpFileName = tracker.DiffFile(fileName);
                     if (!string.IsNullOrWhiteSpace(tmpFileName) && File.Exists(tmpFileName))
                     {
-                        diffLines = File.ReadAllLines(tmpFileName);
-                        this.ShowFile(tmpFileName);
+                        if (new FileInfo(tmpFileName).Length > 2 * 1024 * 1024)
+                        {
+                            this.DiffEditor.Text = "File is too big to display: " + fileName;
+                        }
+                        else
+                        {
+                            diffLines = File.ReadAllLines(tmpFileName);
+                            this.ShowFile(tmpFileName);
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
-                    ShowStatusMessage(ex.Message);
+                    //ShowStatusMessage(ex.Message);
+                    this.DiffEditor.Text = ex.Message;
                 }
                 service.NoRefresh = false;
 
@@ -127,12 +148,13 @@ namespace GitUI.UI
             return selectedItem.FileName;
         }
 
-        private void GetSelectedFileName(Action<string> action)
+        private void GetSelectedFileName(Action<string> action, bool changeToGitPathSeparator = false)
         {
             var fileName = GetSelectedFileName();
             if (fileName == null) return;
             try
             {
+                if (changeToGitPathSeparator) fileName.Replace("\\", "/");
                 action(fileName);
             }
             catch (Exception ex)
@@ -143,14 +165,17 @@ namespace GitUI.UI
 
         private void GetSelectedFileFullName(Action<string> action, bool fileMustExists = true)
         {
-            var fileName = GetSelectedFileName();
-            if (fileName == null) return;
-            fileName = System.IO.Path.Combine(this.tracker.GitWorkingDirectory, fileName);
-
-            if (fileMustExists && !File.Exists(fileName)) return;
             try
             {
-                action(fileName);
+                var files = this.dataGrid1.SelectedItems.Cast<GitFile>()
+                    .Select(item=>System.IO.Path.Combine(this.tracker.GitWorkingDirectory, item.FileName))
+                    .ToList();
+
+                foreach (var fileName in files)
+                {
+                    if (fileMustExists && !File.Exists(fileName)) return;
+                    action(fileName);
+                }
             }
             catch (Exception ex)
             {
@@ -162,8 +187,15 @@ namespace GitUI.UI
         #region Git functions
 
         DateTime lastTimeRefresh = DateTime.Now.AddDays(-1);
-        internal void Refresh()
+        internal void Refresh(GitFileStatusTracker tracker)
         {
+            this.label3.Content = "Changed files";
+
+            this.tracker = tracker;
+            this.chkAmend.IsChecked = false;
+            this.chkSignOff.IsChecked = false;
+            this.chkNewBranch.IsChecked = false;
+
             if (tracker == null)
             {
                 //service.NoRefresh = true;
@@ -174,7 +206,7 @@ namespace GitUI.UI
 
             Action act = () =>
             {
-
+                lblMessage.Content = "Commit to: " + tracker.CurrentBranch;
                 service.NoRefresh = true;
                 ShowStatusMessage("Getting changed files ...");
 
@@ -190,7 +222,7 @@ namespace GitUI.UI
 
                 try
                 {
-                    
+
                     this.dataGrid1.ItemsSource = tracker.ChangedFiles;
 
                     ICollectionView view = CollectionViewSource.GetDefaultView(this.dataGrid1.ItemsSource);
@@ -202,7 +234,8 @@ namespace GitUI.UI
                     }
 
                     this.dataGrid1.SelectedValue = selectedFile;
-                    selectedFiles.ForEach(fn=>{
+                    selectedFiles.ForEach(fn =>
+                    {
                         var item = this.dataGrid1.Items.Cast<GitFile>()
                             .Where(i => i.FileName == fn)
                             .FirstOrDefault();
@@ -210,6 +243,13 @@ namespace GitUI.UI
                     });
 
                     ShowStatusMessage("");
+
+                    var changed = tracker.ChangedFiles;
+                    this.label3.Content = string.Format("Changed files: ({0}) +{1} ~{2} -{3} !{4}", tracker.CurrentBranch,
+                        changed.Where(f => f.Status == GitFileStatus.New || f.Status == GitFileStatus.Added).Count(),
+                        changed.Where(f => f.Status == GitFileStatus.Modified || f.Status == GitFileStatus.Staged).Count(),
+                        changed.Where(f => f.Status == GitFileStatus.Deleted || f.Status == GitFileStatus.Removed).Count(),
+                        changed.Where(f => f.Status == GitFileStatus.Conflict).Count());
                 }
                 catch (Exception ex)
                 {
@@ -272,61 +312,7 @@ namespace GitUI.UI
                 return true;
         }
 
-        internal void Commit()
-        {
-            service.NoRefresh = true;
-            if (HasComments() && StageSelectedFiles())
-            {
-                try
-                {
-                    ShowStatusMessage("Committing ...");
-                    var id = tracker.Commit(Comments);
-                    ShowStatusMessage("Commit successfully. Commit Hash: " + id);
-                    ClearUI();
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Exclamation);
-                    ShowStatusMessage(ex.Message);
-                }
-            }
-            service.NoRefresh = false;
-            //service.lastTimeRefresh = DateTime.Now;
-            //service.NodesGlyphsDirty = true; // force refresh
-        }
-
-        internal void AmendCommit()
-        {
-            if (string.IsNullOrWhiteSpace(Comments))
-            {
-                Comments = tracker.LastCommitMessage;
-                return;
-            }
-            else
-            {
-                service.NoRefresh = true;
-                if (StageSelectedFiles())
-                {
-                    try
-                    {
-                        ShowStatusMessage("Amending last Commit ...");
-                        var id = tracker.AmendCommit(Comments);
-                        ShowStatusMessage("Amend last commit successfully. Commit Hash: " + id);
-                        ClearUI();
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Exclamation);
-                        ShowStatusMessage(ex.Message);
-                    }
-                }
-                service.NoRefresh = false;
-                //service.lastTimeRefresh = DateTime.Now;
-                //service.NodesGlyphsDirty = true; // force refresh
-            }
-        }
-
-        private bool StageSelectedFiles()
+        private bool StageSelectedFiles(bool showWarning)
         {
             var unstaged = this.dataGrid1.Items.Cast<GitFile>()
                                .Where(item => item.IsSelected && !item.IsStaged)
@@ -343,7 +329,7 @@ namespace GitUI.UI
             bool hasStaged = tracker == null ? false :
                              tracker.ChangedFiles.Any(f => f.IsStaged);
 
-            if (!hasStaged)
+            if (!hasStaged && showWarning)
             {
                 MessageBox.Show("No file has been staged for commit.", "Commit",
                     MessageBoxButton.OK, MessageBoxImage.Exclamation);
@@ -361,33 +347,49 @@ namespace GitUI.UI
 
         private void dataGrid1_ContextMenuOpening(object sender, ContextMenuEventArgs e)
         {
-            if (this.dataGrid1.SelectedCells.Count == 0) return;
-            var selectedItem = this.dataGrid1.SelectedCells[0].Item as GitFile;
-            if (selectedItem == null) return;
+            if (this.dataGrid1.SelectedItems.Count == 0) return;
 
-            switch (selectedItem.Status)
+            if (this.dataGrid1.SelectedItems.Count == 1)
             {
-                case GitFileStatus.Added:
-                case GitFileStatus.New:
-                    menuCompare.IsEnabled = menuUndo.IsEnabled = false;
-                    break;
+                var selectedItem = this.dataGrid1.SelectedItem as GitFile;
+                if (selectedItem == null) return;
 
-                case GitFileStatus.Modified:
-                case GitFileStatus.Staged:
-                    menuCompare.IsEnabled = menuUndo.IsEnabled = true;
-                    break;
+                switch (selectedItem.Status)
+                {
+                    case GitFileStatus.Added:
+                    case GitFileStatus.New:
+                        //menuCompare.IsEnabled = 
+                        menuUndo.IsEnabled = false;
+                        break;
 
-                case GitFileStatus.Removed:
-                case GitFileStatus.Deleted:
-                    menuCompare.IsEnabled = false;
-                    menuUndo.IsEnabled = true;
-                    break;
+                    case GitFileStatus.Modified:
+                    case GitFileStatus.Staged:
+                        //menuCompare.IsEnabled = 
+                        menuUndo.IsEnabled = true;
+                        break;
+
+                    case GitFileStatus.Removed:
+                    case GitFileStatus.Deleted:
+                        //menuCompare.IsEnabled = false;
+                        menuUndo.IsEnabled = true;
+                        break;
+                }
+
+                menuStage.Visibility = selectedItem.IsStaged ? Visibility.Collapsed : Visibility.Visible;
+                menuUnstage.Visibility = !selectedItem.IsStaged ? Visibility.Collapsed : Visibility.Visible;
+                menuDeleteFile.Visibility = (selectedItem.Status == GitFileStatus.New || selectedItem.Status == GitFileStatus.Modified) ?
+                    Visibility.Visible : Visibility.Collapsed;
+                menuIgnore.IsEnabled = true;
             }
-
-            menuStage.Visibility = selectedItem.IsStaged ? Visibility.Collapsed : Visibility.Visible;
-            menuUnstage.Visibility = !selectedItem.IsStaged ? Visibility.Collapsed : Visibility.Visible;
-            menuDeleteFile.Visibility = (selectedItem.Status == GitFileStatus.New || selectedItem.Status == GitFileStatus.Modified) ?
-                Visibility.Visible : Visibility.Collapsed;
+            else
+            {
+                menuStage.Visibility = 
+                menuUnstage.Visibility =
+                menuDeleteFile.Visibility = Visibility.Visible;
+                menuUndo.IsEnabled = true;
+                menuIgnore.IsEnabled = false;
+                //menuCompare.IsEnabled = false;
+            }
         }
 
         private void menuCompare_Click(object sender, RoutedEventArgs e)
@@ -402,10 +404,19 @@ namespace GitUI.UI
         {
             GetSelectedFileFullName(fileName =>
             {
-                //service.UndoFileChanges(fileName);
+                GitFileStatus status = tracker.GetFileStatus(fileName);
+                if (status == GitFileStatus.Modified || status == GitFileStatus.Staged ||
+                    status == GitFileStatus.Deleted || status == GitFileStatus.Removed)
+                {
+                    if (MessageBox.Show("Are you sure you want to undo changes for " + Path.GetFileName(fileName) +
+                        " and restore a version from the last commit? ",
+                        "Undo Changes", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                    {
+                        tracker.CheckOutFile(fileName);
+                    }
+                }
             }, false); // file must exists check flag is false
         }
-
 
         private void menuStage_Click(object sender, RoutedEventArgs e)
         {
@@ -427,13 +438,9 @@ namespace GitUI.UI
 
         private void menuDeleteFile_Click(object sender, RoutedEventArgs e)
         {
-            const string deleteMsg = @"
-
-Note: if the file is included project, you need to delete the file from project in solution explorer.";
-
             GetSelectedFileFullName(fileName =>
             {
-                if (MessageBox.Show("Are you sure you want to delete file: " + Path.GetFileName(fileName) + deleteMsg,
+                if (MessageBox.Show("Are you sure you want to delete file: " + Path.GetFileName(fileName),
                                    "Delete File",
                                    MessageBoxButton.YesNo,
                                    MessageBoxImage.Question) == MessageBoxResult.Yes)
@@ -445,6 +452,7 @@ Note: if the file is included project, you need to delete the file from project 
 
         #endregion
 
+        #region Ignore files
         private void menuIgnore_Click(object sender, RoutedEventArgs e)
         {
 
@@ -452,17 +460,99 @@ Note: if the file is included project, you need to delete the file from project 
 
         private void menuIgnoreFile_Click(object sender, RoutedEventArgs e)
         {
-
+            GetSelectedFileName((fileName) =>
+            {
+                tracker.AddIgnoreItem(fileName);
+            }, true);
         }
 
         private void menuIgnoreFilePath_Click(object sender, RoutedEventArgs e)
         {
-
+            GetSelectedFileName((fileName) =>
+            {
+                tracker.AddIgnoreItem(Path.GetDirectoryName(fileName) + "*/");
+            }, true);
         }
 
         private void menuIgnoreFileExt_Click(object sender, RoutedEventArgs e)
         {
+            GetSelectedFileName((fileName) =>
+            {
+                tracker.AddIgnoreItem("*" + Path.GetExtension(fileName));
+            }, true);
+        }
 
+        private void menuRefresh_Click(object sender, RoutedEventArgs e)
+        {
+            HistoryViewCommands.RefreshGraph.Execute(null, this);
+        } 
+
+        #endregion
+
+        private void chkNewBranch_Checked(object sender, RoutedEventArgs e)
+        {
+            txtNewBranch.Focus();
+        }
+
+        private void txtNewBranch_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            chkNewBranch.IsChecked = txtNewBranch.Text.Length > 0;
+        }
+
+        private void chkAmend_Checked(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(Comments))
+            {
+                Comments = tracker.LastCommitMessage;
+            }
+        }
+
+        private void btnPendingChanges_Click(object sender, RoutedEventArgs e)
+        {
+            if (tracker == null) return;
+
+            try
+            {
+                service.NoRefresh = true;
+
+                if (chkNewBranch.IsChecked == true)
+                {
+                    if (string.IsNullOrWhiteSpace(txtNewBranch.Text))
+                    {
+                        MessageBox.Show("Please enter new branch name.", "Commit",
+                            MessageBoxButton.OK, MessageBoxImage.Exclamation);
+                        txtNewBranch.Focus();
+                        return;
+                    }
+                    tracker.CheckOutBranch(txtNewBranch.Text, true);
+                }
+
+                var isAmend = chkAmend.IsChecked == true;
+                if (HasComments() && StageSelectedFiles(!isAmend))
+                {
+                    ShowStatusMessage("Committing ...");
+                    var id = tracker.Commit(Comments, isAmend, chkSignOff.IsChecked == true);
+                    ShowStatusMessage("Commit successfully. Commit Hash: " + id);
+                    ClearUI();
+
+                    HistoryViewCommands.CloseCommitDetails.Execute(this, null);
+                    HistoryViewCommands.RefreshGraph.Execute(this, null);
+                }
+                service.NoRefresh = false;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Exclamation);
+                ShowStatusMessage(ex.Message);
+            }
+        }
+
+        private void UserControl_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                btnPendingChanges_Click(this, null);
+            }
         }
     }
 

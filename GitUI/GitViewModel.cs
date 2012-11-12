@@ -88,7 +88,7 @@ namespace GitUI
 				fileSystemWatcher = new FileSystemWatcher(directory);
 				fileSystemWatcher.IncludeSubdirectories = true;
 				//fileSystemWatcher.Created += new FileSystemEventHandler(fileSystemWatcher_Changed);
-				//fileSystemWatcher.Deleted += new FileSystemEventHandler(fileSystemWatcher_Changed);
+				fileSystemWatcher.Deleted += new FileSystemEventHandler(fileSystemWatcher_Changed);
 				//fileSystemWatcher.Renamed += new FileSystemEventHandler(fileSystemWatcher_Changed);
 				fileSystemWatcher.Changed += new FileSystemEventHandler(fileSystemWatcher_Changed);
 				fileSystemWatcher.EnableRaisingEvents = true;
@@ -181,8 +181,8 @@ namespace GitUI
 			}
 			else
 			{
-				var ret = GitBash.Run(cmd, this.Tracker.GitWorkingDirectory);
-				return ret;
+				var result = GitBash.Run(cmd, this.Tracker.GitWorkingDirectory);
+				return result.Output;
 			}
 		}
 

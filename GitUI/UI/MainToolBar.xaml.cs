@@ -120,7 +120,7 @@ namespace GitUI.UI
             else
             {
                 lstSearch.ItemsSource = tracker.RepositoryGraph.Commits
-                    .Where(c => c.Message.ToLower().Contains(text) ||
+                    .Where(c => c.Subject.ToLower().Contains(text) ||
                            c.Id.StartsWith(text) ||
                            c.CommitterName.ToLower().StartsWith(text) ||
                            c.CommitterEmail.ToLower().StartsWith(text) ||
@@ -223,6 +223,7 @@ namespace GitUI.UI
 
         internal void SelectCommit(string id, string name)
         {
+            id = id.Substring(0, 7);
             HideSearchList();
             lblSelectedCommits.Visibility = Visibility.Visible;
             if (id1 == null)

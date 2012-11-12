@@ -352,8 +352,19 @@ namespace GitScc
 
         internal void RunDiffCommand(string file1, string file2)
         {
+            if (GitSccOptions.Current.UseVsDiff)
+            {
+                var diffService = (IVsDifferenceService)GetService(typeof(SVsDifferenceService));
+                if (diffService != null)
+                {
+                    diffService.OpenComparisonWindow(file1, file2);
+                    return;
+                }
+            }
             var difftoolPath = GitSccOptions.Current.DifftoolPath;
+            if (string.IsNullOrWhiteSpace(difftoolPath)) difftoolPath = "diffmerge.exe";
             RunCommand(difftoolPath, "\"" + file1 + "\" \"" + file2 + "\"");
+
         }
 
         private void OnInitCommand(object sender, EventArgs e)
@@ -419,14 +430,25 @@ namespace GitScc
             path = Path.Combine(path, "Dragon.pkg");
             var tmpPath = Path.Combine(Path.GetTempPath(), "Dragon.exe");
 
-            try
+            var needCopy = !File.Exists(tmpPath);
+            if(!needCopy)
             {
-                File.Copy(path, tmpPath, true);
+                var date1 = File.GetLastWriteTimeUtc(path);
+                var date2 = File.GetLastWriteTimeUtc(tmpPath);
+                needCopy = (date1>date2);
             }
-            catch(Exception ex) // try copy file silently
+
+            if (needCopy)
             {
-                if (ErrorHandler.IsCriticalException(ex))
-                    throw;
+                try
+                {
+                    File.Copy(path, tmpPath, true);
+                }
+                catch(Exception ex) // try copy file silently
+                {
+                    if (ErrorHandler.IsCriticalException(ex))
+                        throw;
+                }
             }
 
             if (File.Exists(tmpPath))

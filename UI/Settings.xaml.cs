@@ -44,7 +44,12 @@ namespace GitScc.UI
             txtGitExePath.Text = GitBash.GitExePath;
             try
             {
-                txtMessage.Content = GitBash.Run("version", "");
+                var result = GitBash.Run("version", "");
+                txtMessage.Content = result.Output;
+                result = GitBash.Run("config --global user.name", "");
+                txtUserName.Text = result.Output;
+                result = GitBash.Run("config --global user.email", "");
+                txtUserEmail.Text = result.Output;
             }
             catch (Exception ex)
             {
@@ -53,27 +58,38 @@ namespace GitScc.UI
 
             if (GitBash.Exists && txtMessage.Content.ToString().StartsWith("git version"))
             {
-                btnGo.Visibility = Visibility.Visible;
+                btnOK.Visibility = Visibility.Visible;
             }
         }
 
-
-        private void btnGo_Click(object sender, RoutedEventArgs e)
+        private void btnOK_Click(object sender, RoutedEventArgs e)
         {
-            GitSccOptions.Current.GitBashPath = GitBash.GitExePath;
-            GitSccOptions.Current.SaveConfig();
-            var sccService = BasicSccProvider.GetServiceEx<SccProviderService>();
-            sccService.NoRefresh = false;
-            sccService.Refresh();
-        }
-
-        private void Grid_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            btnGo.Visibility = Visibility.Collapsed;
-            txtMessage.Content = "";
-            if (e.Key == Key.Enter)
+            if (string.IsNullOrWhiteSpace(txtUserName.Text))
             {
-                CheckGitBash();
+                MessageBox.Show("Please enter user name", "Error", MessageBoxButton.OK);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(txtUserEmail.Text))
+            {
+                MessageBox.Show("Please enter user email", "Error", MessageBoxButton.OK);
+                return;
+            }
+
+            try
+            {
+                GitBash.Run("config --global user.name \"" + txtUserName.Text + "\"", "");
+                GitBash.Run("config --global user.email " + txtUserEmail.Text, "");
+
+                GitSccOptions.Current.GitBashPath = GitBash.GitExePath;
+                GitSccOptions.Current.SaveConfig();
+                var sccService = BasicSccProvider.GetServiceEx<SccProviderService>();
+                sccService.NoRefresh = false;
+                sccService.Refresh();
+            }
+            catch (Exception ex)
+            {
+                txtMessage.Content = ex.Message;
             }
         }
 
@@ -81,8 +97,8 @@ namespace GitScc.UI
         {
             this.Visibility = Visibility.Visible;
             txtGitExePath.Text = GitBash.GitExePath;
-            btnGo.Visibility = Visibility.Collapsed;
-            txtGitExePath.Text = GitSccOptions.Current.GitBashPath;
+            btnOK.Visibility = Visibility.Collapsed;
+            CheckGitBash();
             txtMessage.Content = "";
         }
 
@@ -91,5 +107,11 @@ namespace GitScc.UI
             this.Visibility = Visibility.Hidden;
         }
 
+        private void btnVerify_Click(object sender, RoutedEventArgs e)
+        {
+            btnOK.Visibility = Visibility.Collapsed;
+            txtMessage.Content = "";
+            CheckGitBash();
+        }
     }
 }

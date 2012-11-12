@@ -40,7 +40,7 @@ namespace GitScc
             // the object returned by the Content property.
             base.Content = control;
 
-            //OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
+            OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
 
             //var cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesCommit);
             //var menu = new MenuCommand(new EventHandler(OnCommitCommand), cmd);
@@ -50,9 +50,9 @@ namespace GitScc
             //menu = new MenuCommand(new EventHandler(OnAmendCommitCommand), cmd);
             //mcs.AddCommand(menu);
 
-            //cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesRefresh);
-            //menu = new MenuCommand(new EventHandler(OnRefreshCommand), cmd);
-            //mcs.AddCommand(menu);
+            var cmd = new CommandID(GuidList.guidSccProviderCmdSet, CommandId.icmdPendingChangesRefresh);
+            var menu = new MenuCommand(new EventHandler(OnRefreshCommand), cmd);
+            mcs.AddCommand(menu);
 
             //sccProviderService = BasicSccProvider.GetServiceEx<SccProviderService>();
             //Refresh(sccProviderService.CurrentTracker, true); // refresh when the tool window becomes visible
@@ -63,24 +63,33 @@ namespace GitScc
         {
             sccProviderService = BasicSccProvider.GetServiceEx<SccProviderService>();
             Refresh(sccProviderService.CurrentTracker, true); // refresh when the tool window becomes visible
-        }    
+        }
+
+        internal bool hasFileSaved()
+        {
+            var dte = BasicSccProvider.GetServiceEx<EnvDTE.DTE>();
+            return dte.ItemOperations.PromptToSave != EnvDTE.vsPromptResult.vsPromptResultCancelled;
+        }
 
         internal void OnCommitCommand()
         {
+            if (!hasFileSaved()) return;
             ((PendingChangesView)control).Commit();
         }
 
         internal void OnAmendCommitCommand()
         {
+            if (!hasFileSaved()) return;
             ((PendingChangesView)control).AmendCommit();
         }
 
-        //private void OnRefreshCommand(object sender, EventArgs e)
-        //{
-        //    sccProviderService.OpenTracker();
-        //    sccProviderService.RefreshNodesGlyphs();
-        //    Refresh(sccProviderService.CurrentTracker, true);
-        //}
+        private void OnRefreshCommand(object sender, EventArgs e)
+        {
+            hasFileSaved(); //just a reminder, refresh anyway
+            sccProviderService.OpenTracker();
+            sccProviderService.RefreshNodesGlyphs();
+            Refresh(sccProviderService.CurrentTracker, true);
+        }
 
         internal void Refresh(GitFileStatusTracker tracker, bool force = false)
         {
